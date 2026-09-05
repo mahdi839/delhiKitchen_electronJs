@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+    <title>Delhi Kitchen Till</title>
+    <link rel="stylesheet" href="shell.css">
+</head>
+<body>
+    <header class="chrome">
+        <div class="brand">
+            <div class="mark">DK</div>
+            <div>
+                <p class="title">Delhi Kitchen Till</p>
+                <p class="subtitle">Offline billing · Local SQLite</p>
+            </div>
+        </div>
+        <nav class="screens" id="screens">
+            <button data-screen="pos">POS</button>
+            <button data-screen="orders">Orders</button>
+            <button data-screen="kitchen">KOT</button>
+            <button data-screen="tables">Tables</button>
+            <button data-screen="sections">Sections</button>
+            <button data-screen="products">Products</button>
+            <button data-screen="categories">Categories</button>
+            <button data-screen="reports">Bills</button>
+            <button data-screen="dashboard">Dashboard</button>
+        </nav>
+        <div class="tools">
+            <span id="netBadge" class="badge offline">Offline</span>
+            <select id="printerSelect" title="Receipt printer"></select>
+            <button type="button" id="syncBtn" class="gold">Sync</button>
+            <div class="win">
+                <button type="button" data-win="min">–</button>
+                <button type="button" data-win="max">□</button>
+                <button type="button" data-win="close" class="close">×</button>
+            </div>
+        </div>
+    </header>
+
+    <section id="stage" class="stage splash">
+        <div class="splash-card" id="splashCard">
+            <div class="mark xl">DK</div>
+            <h1>Delhi Kitchen</h1>
+            <p class="lede">Premium offline till</p>
+            <p id="bootMessage" class="status-copy">Starting local billing engine…</p>
+            <div class="bar"><span id="bootBar"></span></div>
+        </div>
+
+        <div class="setup-card hidden" id="setupCard">
+            <p class="kicker">First launch</p>
+            <h2>Load the kitchen, then bill without internet.</h2>
+            <p class="lede">The POS screen stays the same. This app keeps a local copy of the database and only talks to the cloud when you press Sync.</p>
+
+            <label>Laravel project folder
+                <input id="laravelPath" type="text">
+            </label>
+            <label>PHP path (leave blank to auto-detect)
+                <input id="phpPath" type="text" placeholder="php">
+            </label>
+            <label>Cloud website URL
+                <input id="cloudUrl" type="url" placeholder="https://your-delhi-kitchen-site.com">
+            </label>
+            <label>Cloud sync token
+                <input id="cloudToken" type="password" placeholder="Same DESKTOP_SYNC_TOKEN as the website .env">
+            </label>
+            <div class="actions">
+                <button type="button" id="saveSetup" class="ghost">Save settings</button>
+                <button type="button" id="importBtn" class="gold">Import from this PC</button>
+                <button type="button" id="cloudPullBtn" class="gold">Pull from cloud</button>
+            </div>
+            <p id="setupMessage" class="status-copy"></p>
+        </div>
+    </section>
+
+    <footer class="tray">
+        <span id="trayLeft">Local engine</span>
+        <span id="trayMid">Printer not selected</span>
+        <span id="trayRight">Last sync —</span>
+    </footer>
+    <script src="shell.js"></script>
+</body>
+</html>

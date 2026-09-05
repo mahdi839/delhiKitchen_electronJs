@@ -1,0 +1,14 @@
+{
+  "name": "delhi-kitchen-till",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Delhi Kitchen offline billing till. From this folder run: npm install && npm start",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "postinstall": "node scripts/download-electron.js"
+  },
+  "devDependencies": {
+    "electron": "^35.2.1"
+  }
+}

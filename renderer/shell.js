@@ -94,6 +94,16 @@ document.querySelector('.win').addEventListener('click', (event) => {
     }
 });
 
+document.getElementById('reloadBtn').addEventListener('click', async () => {
+    trayLeft.textContent = 'Reloading…';
+    try {
+        await window.till.reloadUi();
+        trayLeft.textContent = 'Reloaded — latest page loaded';
+    } catch (error) {
+        trayLeft.textContent = error.message || 'Reload failed';
+    }
+});
+
 document.getElementById('syncBtn').addEventListener('click', async () => {
     trayLeft.textContent = 'Syncing…';
     try {

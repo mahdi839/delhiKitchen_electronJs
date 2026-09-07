@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, BrowserView, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, dialog, session } = require('electron');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -17,6 +17,7 @@ const SCREENS = {
     products: '/products',
     categories: '/categories',
     reports: '/reports',
+    settings: '/settings',
 };
 
 let mainWindow = null;
@@ -34,6 +35,14 @@ function sendStatus(partial) {
 
 function chromeHeight() {
     return { top: 64, bottom: 42 };
+}
+
+function resetToActualSize(contents) {
+    if (!contents || contents.isDestroyed()) {
+        return;
+    }
+    contents.setZoomLevel(0);
+    contents.setZoomFactor(1);
 }
 
 function layoutView() {
@@ -64,10 +73,14 @@ function attachTill() {
         },
     });
     mainWindow.addBrowserView(tillView);
-    tillView.setAutoResize({ width: true, height: true });
+    tillView.setAutoResize({ width: false, height: false });
+    bindReloadKeys(tillView.webContents);
     layoutView();
     tillView.webContents.on('did-finish-load', () => {
+        resetToActualSize(tillView.webContents);
         tillView.webContents.executeJavaScript(`
+            document.documentElement.classList.add('desktop-till');
+            document.querySelectorAll('[data-toggle-sidebar]').forEach((el) => el.remove());
             if (!window.__dkPrintPatched) {
                 window.__dkPrintPatched = true;
                 window.print = () => window.desktop && window.desktop.printReceipt
@@ -81,6 +94,30 @@ function attachTill() {
 async function loadTill(pathname = '/pos') {
     attachTill();
     await tillView.webContents.loadURL(`${engine.url}${pathname}`);
+}
+
+async function reloadUi() {
+    await session.defaultSession.clearCache();
+    if (tillView && !tillView.webContents.isDestroyed()) {
+        tillView.webContents.reloadIgnoringCache();
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.reloadIgnoringCache();
+    }
+    return { ok: true };
+}
+
+function bindReloadKeys(contents) {
+    contents.on('before-input-event', (event, input) => {
+        if (input.type !== 'keyDown') {
+            return;
+        }
+        const key = String(input.key || '');
+        if (key === 'F5' || ((input.control || input.meta) && key.toLowerCase() === 'r')) {
+            event.preventDefault();
+            reloadUi();
+        }
+    });
 }
 
 async function printReceipt() {
@@ -134,7 +171,10 @@ function createWindow() {
         },
     });
     mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'shell.html'));
+    bindReloadKeys(mainWindow.webContents);
+    mainWindow.webContents.on('did-finish-load', () => resetToActualSize(mainWindow.webContents));
     mainWindow.once('ready-to-show', () => {
+        resetToActualSize(mainWindow.webContents);
         mainWindow.maximize();
         mainWindow.show();
     });
@@ -145,7 +185,10 @@ function createWindow() {
     });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+    await session.defaultSession.clearCache();
+    createWindow();
+});
 
 app.on('window-all-closed', () => {
     laravel.stopServer();
@@ -270,3 +313,4 @@ ipcMain.handle('open-screen', async (_event, screen) => {
 });
 
 ipcMain.handle('print-receipt', () => printReceipt());
+ipcMain.handle('reload-ui', () => reloadUi());

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('till', {
     printers: () => ipcRenderer.invoke('list-printers'),
     setPrinter: (name) => ipcRenderer.invoke('set-printer', name),
     openScreen: (screen) => ipcRenderer.invoke('open-screen', screen),
+    reloadUi: () => ipcRenderer.invoke('reload-ui'),
     windowControl: (action) => ipcRenderer.send('window-control', action),
     onStatus: (fn) => ipcRenderer.on('till-status', (_event, payload) => fn(payload)),
 });

@@ -3,32 +3,31 @@
 <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
-    <title>Delhi Kitchen Till</title>
+    <title>Delhi Kitchen</title>
     <link rel="stylesheet" href="shell.css">
 </head>
 <body>
     <header class="chrome">
         <div class="brand">
             <div class="mark">DK</div>
-            <div>
-                <p class="title">Delhi Kitchen Till</p>
-                <p class="subtitle">Offline billing · Local SQLite</p>
-            </div>
+            <p class="title">Delhi Kitchen</p>
         </div>
         <nav class="screens" id="screens">
-            <button data-screen="pos">POS</button>
-            <button data-screen="orders">Orders</button>
-            <button data-screen="kitchen">KOT</button>
-            <button data-screen="tables">Tables</button>
-            <button data-screen="sections">Sections</button>
-            <button data-screen="products">Products</button>
-            <button data-screen="categories">Categories</button>
-            <button data-screen="reports">Bills</button>
-            <button data-screen="dashboard">Dashboard</button>
+            <button data-screen="pos" class="nav-pos active">POS</button>
+            <button data-screen="orders" class="nav-orders">Orders</button>
+            <button data-screen="kitchen" class="nav-kot">KOT</button>
+            <button data-screen="tables" class="nav-tables">Tables</button>
+            <button data-screen="sections" class="nav-sections">Sections</button>
+            <button data-screen="products" class="nav-products">Products</button>
+            <button data-screen="categories" class="nav-categories">Categories</button>
+            <button data-screen="reports" class="nav-bills">Bills</button>
+            <button data-screen="dashboard" class="nav-dash">Dashboard</button>
+            <button data-screen="settings" class="nav-settings">Settings</button>
         </nav>
         <div class="tools">
             <span id="netBadge" class="badge offline">Offline</span>
             <select id="printerSelect" title="Receipt printer"></select>
+            <button type="button" id="reloadBtn" class="ghost">Reload</button>
             <button type="button" id="syncBtn" class="gold">Sync</button>
             <div class="win">
                 <button type="button" data-win="min">–</button>

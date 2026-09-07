@@ -25,11 +25,12 @@ html, body {
     -webkit-app-region: drag;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     background:
-        linear-gradient(180deg, rgba(125, 11, 167, .18), transparent 68%),
-        linear-gradient(90deg, #0b1020, #121a2e 55%, #0b1020);
-    border-bottom: 1px solid var(--line);
+        linear-gradient(180deg, rgba(243, 215, 160, .1), transparent 62%),
+        linear-gradient(115deg, #171325 0%, #10182a 48%, #10231f 100%);
+    border-bottom: 1px solid rgba(212, 162, 76, .38);
+    box-shadow: inset 0 -1px 0 rgba(255, 247, 230, .08);
 }
 
 .chrome {
@@ -53,7 +54,7 @@ html, body {
     color: var(--muted);
 }
 
-.brand { display: flex; align-items: center; gap: 10px; min-width: 210px; }
+.brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .mark {
     width: 36px;
     height: 36px;
@@ -66,16 +67,17 @@ html, body {
     box-shadow: 0 8px 24px rgba(212, 162, 76, .28);
 }
 .mark.xl { width: 72px; height: 72px; font-size: 28px; border-radius: 22px; margin: 0 auto 12px; }
-.title { margin: 0; font-size: 14px; font-weight: 800; letter-spacing: .02em; }
-.subtitle { margin: 0; font-size: 10px; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; }
+.title { margin: 0; font-size: 14px; font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
 
 .screens, .tools, .win, .actions { -webkit-app-region: no-drag; }
 .screens {
     display: flex;
-    flex: 1;
-    gap: 4px;
-    overflow: auto;
-    padding: 6px 0;
+    flex: 1 1 auto;
+    align-items: stretch;
+    gap: 8px;
+    min-width: 0;
+    height: 40px;
+    overflow: hidden;
 }
 .screens button, .gold, .ghost, .win button {
     border: 0;
@@ -83,21 +85,47 @@ html, body {
     font: inherit;
 }
 .screens button {
-    background: transparent;
-    color: var(--muted);
-    padding: 8px 10px;
-    border-radius: 999px;
+    flex: 1 1 0;
+    min-width: 0;
+    height: 40px;
+    padding: 0 6px;
+    border-radius: 12px;
+    color: #fff;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 800;
     letter-spacing: .08em;
     text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border: 1px solid rgba(255, 255, 255, .14);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .22),
+        0 8px 18px rgba(0, 0, 0, .22);
+    transition: filter .15s ease, transform .15s ease, box-shadow .15s ease;
 }
-.screens button:hover, .screens button.active {
-    background: rgba(212, 162, 76, .16);
-    color: var(--gold-2);
+.screens button:hover {
+    filter: brightness(1.12);
+    transform: translateY(-1px);
 }
+.screens button.active {
+    box-shadow:
+        0 0 0 2px rgba(243, 215, 160, .88),
+        inset 0 1px 0 rgba(255, 255, 255, .32),
+        0 10px 20px rgba(212, 162, 76, .28);
+}
+.screens .nav-pos { background: #0f766e; }
+.screens .nav-orders { background: #4338ca; }
+.screens .nav-kot { background: #b45309; }
+.screens .nav-tables { background: #0369a1; }
+.screens .nav-sections { background: #6d28d9; }
+.screens .nav-products { background: #047857; }
+.screens .nav-categories { background: #9f1239; }
+.screens .nav-bills { background: #334155; }
+.screens .nav-dash { background: linear-gradient(180deg, #d4a24c, #a56b18); color: #1a1205; }
+.screens .nav-settings { background: #7d0ba7; }
 
-.tools { display: flex; align-items: center; gap: 8px; }
+.tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .badge {
     border-radius: 999px;
     padding: 6px 10px;
@@ -125,13 +153,14 @@ html, body {
     box-shadow: 0 8px 20px rgba(212, 162, 76, .25);
 }
 .ghost {
-    background: transparent;
-    color: var(--gold-2);
-    border: 1px solid var(--line) !important;
+    background: #1e3a5f;
+    color: #e2e8f0;
+    border: 1px solid rgba(243, 215, 160, .35) !important;
     border-radius: 11px;
     padding: 8px 14px;
-    font-weight: 700;
+    font-weight: 800;
 }
+#reloadBtn:hover { filter: brightness(1.12); }
 .win { display: flex; }
 .win button {
     width: 36px;

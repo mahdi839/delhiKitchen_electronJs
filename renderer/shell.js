@@ -54,7 +54,7 @@ function setSyncBanner(state, message) {
         trayLeft.textContent = message;
     }
     setBusy(state === 'working');
-    cancelSetupBtn.textContent = state === 'ok' ? 'Continue to login' : 'Back to till';
+    cancelSetupBtn.textContent = 'Back to till';
 }
 
 function fillSetup(config) {
@@ -111,8 +111,8 @@ window.till.onStatus((payload) => {
         setBusy(false);
     }
     if (payload.phase === 'error') {
-        showSetup();
-        setSyncBanner('error', payload.message);
+        showSplash(payload.message);
+        bootMessage.textContent = payload.message;
     }
     if (payload.config?.printerName) {
         loadPrinters(payload.config.printerName);
@@ -164,7 +164,7 @@ document.getElementById('syncBtn').addEventListener('click', async () => {
     }
     const products = Number(result?.pulled?.products || 0);
     const users = Number(result?.pulled?.users || 0);
-    setSyncBanner('ok', `Complete. Loaded ${products} products and ${users} users. Click Continue to login.`);
+    setSyncBanner('ok', `Complete. Loaded ${products} products and ${users} users. Click Back to till.`);
 });
 
 printerSelect.addEventListener('change', async () => {
@@ -205,7 +205,7 @@ cloudPullBtn.addEventListener('click', async () => {
         }
         const products = Number(result?.pulled?.products || 0);
         const users = Number(result?.pulled?.users || 0);
-        setSyncBanner('ok', `Complete. Loaded ${products} products and ${users} users. Click Continue to login.`);
+        setSyncBanner('ok', `Complete. Loaded ${products} products and ${users} users. Click Back to till.`);
     } catch (error) {
         setSyncBanner('error', error.message || 'Pull failed');
     }
@@ -219,10 +219,7 @@ window.till.ready().then((result) => {
     if (result?.packaged) {
         document.querySelectorAll('.dev-path').forEach((el) => el.classList.add('hidden'));
     }
-    if (result?.needsSetup) {
-        showSetup();
-        setSyncBanner('', 'Enter the live website URL and token, then pull the menu.');
-    } else if (result?.ok) {
+    if (result?.ok) {
         showTill();
     }
     loadPrinters();

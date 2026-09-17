@@ -18,17 +18,31 @@ function bundledEngine() {
     return null;
 }
 
+function seedDefaults() {
+    const bundled = bundledEngine();
+    if (!bundled) {
+        return {};
+    }
+    const file = path.join(path.dirname(bundled.laravelPath), 'seed', 'till-defaults.json');
+    try {
+        return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+        return {};
+    }
+}
+
 function defaults() {
     const bundled = bundledEngine();
+    const seeded = seedDefaults();
     return {
         laravelPath: bundled?.laravelPath || path.resolve(__dirname, '..', '..', 'delhi_kitchen_billing_software'),
         phpPath: bundled?.phpPath || '',
-        cloudUrl: '',
-        cloudToken: '',
+        cloudUrl: seeded.cloudUrl || '',
+        cloudToken: seeded.cloudToken || '',
         printerName: '',
         loopbackToken: '',
-        lastSyncAt: null,
-        setupDone: false,
+        lastSyncAt: seeded.lastSyncAt || null,
+        setupDone: Boolean(seeded.setupDone),
     };
 }
 

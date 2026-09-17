@@ -135,6 +135,24 @@ function sqlitePath(userData) {
     return path.join(userData, 'delhi-kitchen-till.sqlite');
 }
 
+function seedSqlitePath(laravelPath) {
+    return path.join(path.dirname(laravelPath), 'seed', 'delhi-kitchen-till.sqlite');
+}
+
+function installSeededSqlite(laravelPath, userData) {
+    const dest = sqlitePath(userData);
+    if (fs.existsSync(dest) && fs.statSync(dest).size > 100) {
+        return false;
+    }
+    const seed = seedSqlitePath(laravelPath);
+    if (!fs.existsSync(seed) || fs.statSync(seed).size < 100) {
+        return false;
+    }
+    fs.mkdirSync(userData, { recursive: true });
+    fs.copyFileSync(seed, dest);
+    return true;
+}
+
 function desktopEnv(laravelPath, userData, config) {
     const source = parseEnvFile(path.join(laravelPath, '.env'));
     const database = sqlitePath(userData);
@@ -312,6 +330,9 @@ async function startServer({ laravelPath, phpPath, userData, config, onLog }) {
     const php = findPhp(phpPath);
     laravelPath = ensureWritableLaravel(laravelPath, userData);
     disableTelescopeArtifacts(laravelPath);
+    if (installSeededSqlite(laravelPath, userData)) {
+        onLog?.('Loading the menu that shipped with this till…');
+    }
     const env = desktopEnv(laravelPath, userData, config);
     if (!env.APP_KEY) {
         throw new Error('Laravel .env is missing APP_KEY. Open the website project once so it can generate a key.');

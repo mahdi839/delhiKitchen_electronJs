@@ -255,6 +255,61 @@ function hardenComposerJson() {
     fs.writeFileSync(file, `${JSON.stringify(json, null, 4)}\n`);
 }
 
+function copySeed() {
+    const source = path.join(process.env.APPDATA || '', 'delhi-kitchen-till', 'delhi-kitchen-till.sqlite');
+    if (!fs.existsSync(source) || fs.statSync(source).size < 100) {
+        throw new Error(`No till database found at ${source}. Open the till and pull the live menu once before building.`);
+    }
+    const seedDir = path.join(extra, 'seed');
+    fs.mkdirSync(seedDir, { recursive: true });
+    const dest = path.join(seedDir, 'delhi-kitchen-till.sqlite');
+    console.log('Seeding menu database from this PC');
+    fs.copyFileSync(source, dest);
+    stripOperationalData(dest);
+    const configFile = path.join(process.env.APPDATA || '', 'delhi-kitchen-till', 'till-config.json');
+    let cloudUrl = '';
+    let cloudToken = '';
+    try {
+        const saved = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+        cloudUrl = saved.cloudUrl || '';
+        cloudToken = saved.cloudToken || '';
+    } catch {
+        // Optional; Sync can be configured later on the till.
+    }
+    fs.writeFileSync(
+        path.join(seedDir, 'till-defaults.json'),
+        `${JSON.stringify({
+            cloudUrl,
+            cloudToken,
+            setupDone: true,
+            lastSyncAt: new Date().toISOString(),
+        }, null, 2)}\n`,
+    );
+}
+
+function stripOperationalData(sqliteFile) {
+    const php = path.join(phpDest, process.platform === 'win32' ? 'php.exe' : 'php');
+    const ini = path.join(phpDest, 'php.ini');
+    const script = [
+        '<?php',
+        '$db = new PDO("sqlite:" . $argv[1]);',
+        '$db->exec("PRAGMA foreign_keys = OFF");',
+        'foreach (["orders","order_items","order_payments","kot_tickets","sessions","cache","cache_locks","jobs","failed_jobs","job_batches","telescope_entries","telescope_entries_tags","telescope_monitoring"] as $table) {',
+        '    try { $db->exec("DELETE FROM ".$table); } catch (Throwable $e) {}',
+        '}',
+        '$db->exec("VACUUM");',
+        'echo "ok";',
+        '',
+    ].join('\n');
+    const tmp = path.join(phpDest, 'strip-seed.php');
+    fs.writeFileSync(tmp, script);
+    const result = spawnSync(php, ['-c', ini, tmp, sqliteFile], { encoding: 'utf8', windowsHide: true });
+    fs.rmSync(tmp, { force: true });
+    if (String(result.stdout || '').trim() !== 'ok') {
+        throw new Error(`Could not prepare the seeded menu database: ${(result.stderr || result.stdout || '').trim()}`);
+    }
+}
+
 function verifyPhp() {
     const php = path.join(phpDest, process.platform === 'win32' ? 'php.exe' : 'php');
     const ini = path.join(phpDest, 'php.ini');
@@ -272,6 +327,7 @@ function main() {
     emptyDir(extra);
     copyPhp(phpHome());
     copyLaravel();
+    copySeed();
     verifyPhp();
     console.log('Engine staged at', extra);
 }

@@ -182,6 +182,9 @@ async function startEngine(onLog) {
     if (!config.loopbackToken) {
         config = configStore.save({ loopbackToken: createToken() });
     }
+    if (!config.setupDone) {
+        config = configStore.save({ setupDone: true });
+    }
     engine = await laravel.startServer({
         laravelPath: config.laravelPath,
         phpPath: config.phpPath,
@@ -255,10 +258,9 @@ ipcMain.handle('shell-ready', async () => {
     sendStatus({ phase: 'boot', message: 'Starting local billing engine…', online: false });
     try {
         const status = await startEngine((message) => sendStatus({ phase: 'boot', message }));
-        const needsSetup = !config.setupDone || Number(status.users || 0) < 1 || (app.isPackaged && !config.lastSyncAt);
         sendStatus({
-            phase: needsSetup ? 'setup' : 'ready',
-            message: needsSetup ? 'Load menu data once, then bill offline.' : 'Ready to bill',
+            phase: 'ready',
+            message: 'Ready to bill',
             online: false,
             status,
             packaged: app.isPackaged,
@@ -270,12 +272,8 @@ ipcMain.handle('shell-ready', async () => {
                 printerName: config.printerName,
             },
         });
-        if (!needsSetup) {
-            await loadTill('/pos');
-        } else {
-            setTillVisible(false);
-        }
-        return { ok: true, needsSetup, packaged: app.isPackaged };
+        await loadTill('/pos');
+        return { ok: true, needsSetup: false, packaged: app.isPackaged };
     } catch (error) {
         const message = publicError(error);
         sendStatus({ phase: 'error', message, online: false });
@@ -325,8 +323,8 @@ ipcMain.handle('import-source', async () => {
         token: config.loopbackToken,
     });
     config = configStore.save({ setupDone: true });
-    sendStatus({ phase: 'ready', message: 'Menu loaded. Sign in and bill.', status: result });
-    await loadTill('/login');
+    sendStatus({ phase: 'ready', message: 'Menu loaded.', status: result });
+    await loadTill('/pos');
     return result;
 });
 
@@ -357,7 +355,7 @@ ipcMain.handle('sync-now', async () => {
         config = configStore.save({ lastSyncAt: result.last_sync_at || new Date().toISOString() });
         const products = Number(result.pulled?.products || 0);
         const users = Number(result.pulled?.users || 0);
-        const message = `Complete. Loaded ${products} products and ${users} users. Click Continue to login.`;
+        const message = `Complete. Loaded ${products} products and ${users} users. Click Back to till.`;
         sendStatus({
             phase: 'setup',
             sync: 'ok',
@@ -381,12 +379,8 @@ ipcMain.handle('open-cloud-setup', async () => {
 });
 
 ipcMain.handle('close-cloud-setup', async () => {
-    if (app.isPackaged && !config?.lastSyncAt) {
-        openCloudSetup('The live menu is not loaded yet. Enter the URL and token, then Save & pull from cloud.');
-        return { ok: false };
-    }
     sendStatus({ phase: 'ready', message: 'Ready to bill' });
-    await loadTill(config?.lastSyncAt ? '/login' : '/pos');
+    await loadTill('/pos');
     return { ok: true };
 });
 

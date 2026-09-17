@@ -28,6 +28,7 @@
             <span id="netBadge" class="badge offline">Offline</span>
             <select id="printerSelect" title="Receipt printer"></select>
             <button type="button" id="reloadBtn" class="ghost">Reload</button>
+            <button type="button" id="cloudBtn" class="ghost">Cloud</button>
             <button type="button" id="syncBtn" class="gold">Sync</button>
             <div class="win">
                 <button type="button" data-win="min">–</button>
@@ -47,28 +48,32 @@
         </div>
 
         <div class="setup-card hidden" id="setupCard">
-            <p class="kicker">First launch</p>
-            <h2>Load the kitchen, then bill without internet.</h2>
-            <p class="lede">The POS screen stays the same. This app keeps a local copy of the database and only talks to the cloud when you press Sync.</p>
+            <p class="kicker">Cloud connection</p>
+            <h2>Change website or sync token</h2>
+            <p class="lede">The URL and token are saved on this PC. Edit them here, then Pull from cloud. Leave the token blank to keep the one already saved.</p>
 
-            <label>Laravel project folder
+            <label class="dev-path">Laravel project folder
                 <input id="laravelPath" type="text">
             </label>
-            <label>PHP path (leave blank to auto-detect)
+            <label class="dev-path">PHP path (leave blank to auto-detect)
                 <input id="phpPath" type="text" placeholder="php">
             </label>
             <label>Cloud website URL
                 <input id="cloudUrl" type="url" placeholder="https://your-delhi-kitchen-site.com">
             </label>
             <label>Cloud sync token
-                <input id="cloudToken" type="password" placeholder="Same DESKTOP_SYNC_TOKEN as the website .env">
+                <input id="cloudToken" type="password" placeholder="Type a new token, or leave blank to keep saved">
             </label>
             <div class="actions">
+                <button type="button" id="cancelSetup" class="ghost">Back to till</button>
                 <button type="button" id="saveSetup" class="ghost">Save settings</button>
-                <button type="button" id="importBtn" class="gold">Import from this PC</button>
-                <button type="button" id="cloudPullBtn" class="gold">Pull from cloud</button>
+                <button type="button" id="importBtn" class="gold dev-path">Import from this PC</button>
+                <button type="button" id="cloudPullBtn" class="gold">Save & pull from cloud</button>
             </div>
-            <p id="setupMessage" class="status-copy"></p>
+            <div id="syncBanner" class="sync-banner" hidden>
+                <div class="sync-bar"><span></span></div>
+                <p id="setupMessage" class="status-copy">Ready to pull the live menu.</p>
+            </div>
         </div>
     </section>
 

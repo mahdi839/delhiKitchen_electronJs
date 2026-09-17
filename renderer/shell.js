@@ -7,6 +7,10 @@ const splashCard = document.getElementById('splashCard');
 const setupCard = document.getElementById('setupCard');
 const bootMessage = document.getElementById('bootMessage');
 const setupMessage = document.getElementById('setupMessage');
+const syncBanner = document.getElementById('syncBanner');
+const cloudPullBtn = document.getElementById('cloudPullBtn');
+const saveSetupBtn = document.getElementById('saveSetup');
+const cancelSetupBtn = document.getElementById('cancelSetup');
 const trayLeft = document.getElementById('trayLeft');
 const trayMid = document.getElementById('trayMid');
 const trayRight = document.getElementById('trayRight');
@@ -36,10 +40,43 @@ function showTill() {
     stage.className = 'stage till';
 }
 
+function setBusy(busy) {
+    cloudPullBtn.disabled = busy;
+    saveSetupBtn.disabled = busy;
+    cancelSetupBtn.disabled = busy;
+}
+
+function setSyncBanner(state, message) {
+    syncBanner.hidden = !state && !message;
+    syncBanner.className = `sync-banner${state ? ` is-${state}` : ''}`;
+    if (message) {
+        setupMessage.textContent = message;
+        trayLeft.textContent = message;
+    }
+    setBusy(state === 'working');
+    cancelSetupBtn.textContent = state === 'ok' ? 'Continue to login' : 'Back to till';
+}
+
 function fillSetup(config) {
     document.getElementById('laravelPath').value = config.laravelPath || '';
     document.getElementById('phpPath').value = config.phpPath || '';
     document.getElementById('cloudUrl').value = config.cloudUrl || '';
+    const token = document.getElementById('cloudToken');
+    token.value = '';
+    token.placeholder = config.cloudToken
+        ? 'Saved on this PC — type a new token to replace it'
+        : 'Same DESKTOP_SYNC_TOKEN as the website .env';
+}
+
+function setupPayload() {
+    return {
+        laravelPath: document.getElementById('laravelPath').value.trim(),
+        phpPath: document.getElementById('phpPath').value.trim(),
+        cloudUrl: document.getElementById('cloudUrl').value.trim().replace(/\/+$/, ''),
+        cloudToken: document.getElementById('cloudToken').value.trim(),
+        printerName: printerSelect.value,
+        restart: false,
+    };
 }
 
 async function loadPrinters(selected) {
@@ -52,29 +89,36 @@ async function loadPrinters(selected) {
 }
 
 window.till.onStatus((payload) => {
-    if (payload.message) {
-        bootMessage.textContent = payload.message;
-        setupMessage.textContent = payload.message;
-        trayLeft.textContent = payload.message;
-    }
     if (payload.lastSyncAt) {
         trayRight.textContent = `Last sync ${new Date(payload.lastSyncAt).toLocaleString()}`;
+    }
+    if (payload.phase === 'boot') {
+        showSplash(payload.message);
     }
     if (payload.phase === 'setup') {
         showSetup();
         if (payload.config) {
             fillSetup(payload.config);
         }
+        if (payload.sync) {
+            setSyncBanner(payload.sync, payload.message);
+        } else if (payload.message) {
+            setSyncBanner('', payload.message);
+        }
     }
-    if (payload.phase === 'ready') {
+    if (payload.phase === 'ready' && payload.sync !== 'ok') {
         showTill();
+        setBusy(false);
     }
     if (payload.phase === 'error') {
         showSetup();
-        setupMessage.textContent = payload.message;
+        setSyncBanner('error', payload.message);
     }
     if (payload.config?.printerName) {
         loadPrinters(payload.config.printerName);
+    }
+    if (payload.packaged) {
+        document.querySelectorAll('.dev-path').forEach((el) => el.classList.add('hidden'));
     }
 });
 
@@ -104,14 +148,23 @@ document.getElementById('reloadBtn').addEventListener('click', async () => {
     }
 });
 
+document.getElementById('cloudBtn').addEventListener('click', async () => {
+    setSyncBanner('', 'Change the website URL or token, then pull again.');
+    await window.till.openCloudSetup();
+});
+
 document.getElementById('syncBtn').addEventListener('click', async () => {
-    trayLeft.textContent = 'Syncing…';
-    try {
-        await window.till.syncNow();
-        trayLeft.textContent = 'Cloud sync complete';
-    } catch (error) {
-        trayLeft.textContent = error.message || 'Sync failed — billing still works offline';
+    showSetup();
+    setSyncBanner('working', 'Syncing with cloud… downloading menu and users.');
+    await window.till.openCloudSetup();
+    const result = await window.till.syncNow();
+    if (result && result.ok === false) {
+        setSyncBanner('error', result.message || 'Sync failed.');
+        return;
     }
+    const products = Number(result?.pulled?.products || 0);
+    const users = Number(result?.pulled?.users || 0);
+    setSyncBanner('ok', `Complete. Loaded ${products} products and ${users} users. Click Continue to login.`);
 });
 
 printerSelect.addEventListener('change', async () => {
@@ -119,49 +172,42 @@ printerSelect.addEventListener('change', async () => {
     trayMid.textContent = printerSelect.value ? `Printer ${printerSelect.value}` : 'Printer system default';
 });
 
-document.getElementById('saveSetup').addEventListener('click', async () => {
-    setupMessage.textContent = 'Saving…';
-    await window.till.saveSetup({
-        laravelPath: document.getElementById('laravelPath').value.trim(),
-        phpPath: document.getElementById('phpPath').value.trim(),
-        cloudUrl: document.getElementById('cloudUrl').value.trim(),
-        cloudToken: document.getElementById('cloudToken').value.trim(),
-        printerName: printerSelect.value,
-    });
+cancelSetupBtn.addEventListener('click', async () => {
+    await window.till.closeCloudSetup();
+});
+
+saveSetupBtn.addEventListener('click', async () => {
+    setSyncBanner('working', 'Saving settings…');
+    await window.till.saveSetup(setupPayload());
+    setSyncBanner('ok', 'Settings saved. Click Save & pull from cloud to load the menu.');
 });
 
 document.getElementById('importBtn').addEventListener('click', async () => {
-    setupMessage.textContent = 'Importing menu from this PC…';
+    setSyncBanner('working', 'Importing menu from this PC…');
     try {
-        await window.till.saveSetup({
-            laravelPath: document.getElementById('laravelPath').value.trim(),
-            phpPath: document.getElementById('phpPath').value.trim(),
-            cloudUrl: document.getElementById('cloudUrl').value.trim(),
-            cloudToken: document.getElementById('cloudToken').value.trim(),
-            printerName: printerSelect.value,
-        });
+        await window.till.saveSetup(setupPayload());
         await window.till.importSource();
         showTill();
     } catch (error) {
-        setupMessage.textContent = error.message;
+        setSyncBanner('error', error.message);
     }
 });
 
-document.getElementById('cloudPullBtn').addEventListener('click', async () => {
-    setupMessage.textContent = 'Pulling catalog from the cloud…';
+cloudPullBtn.addEventListener('click', async () => {
+    setSyncBanner('working', 'Saving settings, then downloading the live menu…');
     try {
-        await window.till.saveSetup({
-            laravelPath: document.getElementById('laravelPath').value.trim(),
-            phpPath: document.getElementById('phpPath').value.trim(),
-            cloudUrl: document.getElementById('cloudUrl').value.trim(),
-            cloudToken: document.getElementById('cloudToken').value.trim(),
-            printerName: printerSelect.value,
-        });
-        await window.till.syncNow();
-        await window.till.openScreen('pos');
-        showTill();
+        await window.till.saveSetup(setupPayload());
+        setSyncBanner('working', 'Connecting to the cloud… this can take up to 2 minutes.');
+        const result = await window.till.syncNow();
+        if (result && result.ok === false) {
+            setSyncBanner('error', result.message || 'Pull failed');
+            return;
+        }
+        const products = Number(result?.pulled?.products || 0);
+        const users = Number(result?.pulled?.users || 0);
+        setSyncBanner('ok', `Complete. Loaded ${products} products and ${users} users. Click Continue to login.`);
     } catch (error) {
-        setupMessage.textContent = error.message;
+        setSyncBanner('error', error.message || 'Pull failed');
     }
 });
 
@@ -170,8 +216,12 @@ window.addEventListener('offline', setOnline);
 setOnline();
 
 window.till.ready().then((result) => {
+    if (result?.packaged) {
+        document.querySelectorAll('.dev-path').forEach((el) => el.classList.add('hidden'));
+    }
     if (result?.needsSetup) {
         showSetup();
+        setSyncBanner('', 'Enter the live website URL and token, then pull the menu.');
     } else if (result?.ok) {
         showTill();
     }

@@ -14,4 +14,7 @@ contextBridge.exposeInMainWorld('till', {
     reloadUi: () => ipcRenderer.invoke('reload-ui'),
     windowControl: (action) => ipcRenderer.send('window-control', action),
     onStatus: (fn) => ipcRenderer.on('till-status', (_event, payload) => fn(payload)),
+    openCloudSetup: () => ipcRenderer.invoke('open-cloud-setup'),
+    closeCloudSetup: () => ipcRenderer.invoke('close-cloud-setup'),
+    isPackaged: () => ipcRenderer.invoke('till-state').then((state) => Boolean(state?.packaged)),
 });

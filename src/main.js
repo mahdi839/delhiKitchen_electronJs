@@ -33,6 +33,12 @@ function sendStatus(partial) {
     mainWindow?.webContents.send('till-status', partial);
 }
 
+function publicError(error) {
+    return String(error?.message || error || 'Request failed')
+        .replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, '')
+        .trim();
+}
+
 function chromeHeight() {
     return { top: 64, bottom: 42 };
 }
@@ -91,8 +97,41 @@ function attachTill() {
     });
 }
 
+function setTillVisible(visible) {
+    if (!mainWindow || !tillView) {
+        return;
+    }
+    try {
+        mainWindow.removeBrowserView(tillView);
+    } catch {
+        // View was not attached.
+    }
+    if (visible) {
+        mainWindow.addBrowserView(tillView);
+        layoutView();
+    }
+}
+
+function openCloudSetup(message) {
+    setTillVisible(false);
+    sendStatus({
+        phase: 'setup',
+        sync: message ? 'error' : '',
+        packaged: app.isPackaged,
+        message: message || 'Enter the live website URL and sync token, then Pull from cloud.',
+        config: {
+            laravelPath: config?.laravelPath,
+            phpPath: config?.phpPath,
+            cloudUrl: config?.cloudUrl,
+            cloudToken: config?.cloudToken ? 'saved' : '',
+            printerName: config?.printerName,
+        },
+    });
+}
+
 async function loadTill(pathname = '/pos') {
     attachTill();
+    setTillVisible(true);
     await tillView.webContents.loadURL(`${engine.url}${pathname}`);
 }
 
@@ -216,12 +255,13 @@ ipcMain.handle('shell-ready', async () => {
     sendStatus({ phase: 'boot', message: 'Starting local billing engine…', online: false });
     try {
         const status = await startEngine((message) => sendStatus({ phase: 'boot', message }));
-        const needsSetup = !config.setupDone || Number(status.users || 0) < 1;
+        const needsSetup = !config.setupDone || Number(status.users || 0) < 1 || (app.isPackaged && !config.lastSyncAt);
         sendStatus({
             phase: needsSetup ? 'setup' : 'ready',
             message: needsSetup ? 'Load menu data once, then bill offline.' : 'Ready to bill',
             online: false,
             status,
+            packaged: app.isPackaged,
             config: {
                 laravelPath: config.laravelPath,
                 phpPath: config.phpPath,
@@ -232,11 +272,14 @@ ipcMain.handle('shell-ready', async () => {
         });
         if (!needsSetup) {
             await loadTill('/pos');
+        } else {
+            setTillVisible(false);
         }
-        return { ok: true, needsSetup };
+        return { ok: true, needsSetup, packaged: app.isPackaged };
     } catch (error) {
-        sendStatus({ phase: 'error', message: error.message, online: false });
-        return { ok: false, message: error.message };
+        const message = publicError(error);
+        sendStatus({ phase: 'error', message, online: false });
+        return { ok: false, message };
     }
 });
 
@@ -248,6 +291,7 @@ ipcMain.handle('till-state', async () => ({
         printerName: config?.printerName,
         lastSyncAt: config?.lastSyncAt,
     },
+    packaged: app.isPackaged,
     online: false,
 }));
 
@@ -255,11 +299,15 @@ ipcMain.handle('save-setup', async (_event, payload) => {
     config = configStore.save({
         laravelPath: payload.laravelPath || config.laravelPath,
         phpPath: payload.phpPath || config.phpPath,
-        cloudUrl: payload.cloudUrl ?? config.cloudUrl,
+        cloudUrl: (payload.cloudUrl || '').replace(/\/+$/, '') || config.cloudUrl,
         cloudToken: payload.cloudToken || config.cloudToken,
         printerName: payload.printerName ?? config.printerName,
         setupDone: true,
     });
+    if (payload.restart === false && engine) {
+        sendStatus({ phase: 'setup', sync: 'ok', message: 'Settings saved.' });
+        return { ok: true };
+    }
     sendStatus({ phase: 'boot', message: 'Restarting till with your settings…' });
     laravel.stopServer();
     const status = await startEngine((message) => sendStatus({ phase: 'boot', message }));
@@ -268,6 +316,9 @@ ipcMain.handle('save-setup', async (_event, payload) => {
 });
 
 ipcMain.handle('import-source', async () => {
+    if (app.isPackaged) {
+        throw new Error('Use Pull from cloud to load the menu on this till.');
+    }
     sendStatus({ phase: 'setup', message: 'Copying products and tables from this PC…' });
     const result = await laravel.requestJson('/api/desktop/import-source', {
         method: 'POST',
@@ -280,20 +331,63 @@ ipcMain.handle('import-source', async () => {
 });
 
 ipcMain.handle('sync-now', async () => {
-    sendStatus({ message: 'Syncing with cloud…' });
+    if (!config?.cloudUrl || !config?.cloudToken) {
+        openCloudSetup('Cloud URL and sync token are required. Paste them below, then Pull from cloud.');
+        return { ok: false, message: 'Cloud URL and sync token are required.' };
+    }
+    setTillVisible(false);
+    sendStatus({
+        phase: 'setup',
+        sync: 'working',
+        message: `Connecting to ${config.cloudUrl} and downloading the menu…`,
+    });
+    const tick = setInterval(() => {
+        sendStatus({
+            phase: 'setup',
+            sync: 'working',
+            message: 'Still downloading menu from the cloud… please wait.',
+        });
+    }, 3000);
     try {
         const result = await laravel.requestJson('/api/desktop/sync', {
             method: 'POST',
             token: config.loopbackToken,
-            body: { cloud_url: config.cloudUrl, cloud_token: config.cloudToken },
+            body: { cloud_url: config.cloudUrl.replace(/\/+$/, ''), cloud_token: config.cloudToken },
         });
         config = configStore.save({ lastSyncAt: result.last_sync_at || new Date().toISOString() });
-        sendStatus({ message: 'Cloud sync complete.', lastSyncAt: config.lastSyncAt, pending: 0 });
-        return result;
+        const products = Number(result.pulled?.products || 0);
+        const users = Number(result.pulled?.users || 0);
+        const message = `Complete. Loaded ${products} products and ${users} users. Click Continue to login.`;
+        sendStatus({
+            phase: 'setup',
+            sync: 'ok',
+            message,
+            lastSyncAt: config.lastSyncAt,
+            pending: 0,
+        });
+        return { ok: true, message, ...result };
     } catch (error) {
-        sendStatus({ message: error.message });
-        throw error;
+        const message = publicError(error);
+        sendStatus({ phase: 'setup', sync: 'error', message });
+        return { ok: false, message };
+    } finally {
+        clearInterval(tick);
     }
+});
+
+ipcMain.handle('open-cloud-setup', async () => {
+    openCloudSetup();
+    return { ok: true };
+});
+
+ipcMain.handle('close-cloud-setup', async () => {
+    if (app.isPackaged && !config?.lastSyncAt) {
+        openCloudSetup('The live menu is not loaded yet. Enter the URL and token, then Save & pull from cloud.');
+        return { ok: false };
+    }
+    sendStatus({ phase: 'ready', message: 'Ready to bill' });
+    await loadTill(config?.lastSyncAt ? '/login' : '/pos');
+    return { ok: true };
 });
 
 ipcMain.handle('list-printers', async () => {

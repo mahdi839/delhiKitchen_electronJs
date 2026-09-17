@@ -14,23 +14,113 @@ let port = PORT_START;
 let hotBackup = null;
 
 function findPhp(preferred) {
-    const candidates = [
-        preferred,
-        process.env.PHP_BINARY,
-        'D:\\laragon\\bin\\php\\php-8.3.30-Win32-vs16-x64\\php.exe',
-        'C:\\laragon\\bin\\php\\php.exe',
-        'C:\\xampp\\php\\php.exe',
-        'php',
-    ].filter(Boolean);
-
-    for (const candidate of candidates) {
-        if (candidate !== 'php' && !fs.existsSync(candidate)) {
-            continue;
+    if (preferred) {
+        const resolved = path.resolve(preferred);
+        if (fs.existsSync(resolved)) {
+            return resolved;
         }
-        return candidate;
+        throw new Error('Bundled PHP was not found. Reinstall Delhi Kitchen Till.');
     }
-
+    if (process.env.PHP_BINARY && fs.existsSync(process.env.PHP_BINARY)) {
+        return path.resolve(process.env.PHP_BINARY);
+    }
     return 'php';
+}
+
+function phpIniLines(phpPath, errorLog) {
+    const phpDir = path.dirname(phpPath);
+    const extDir = path.join(phpDir, 'ext');
+    const slash = (value) => value.replace(/\\/g, '/');
+    const cacert = path.join(phpDir, 'cacert.pem');
+    const lines = [
+        `extension_dir="${slash(extDir)}"`,
+        'memory_limit=256M',
+        'max_execution_time=90',
+        'display_errors=0',
+        'log_errors=1',
+        `error_log="${slash(errorLog)}"`,
+        'date.timezone=UTC',
+        'extension=curl',
+        'extension=fileinfo',
+        'extension=gd',
+        'extension=intl',
+        'extension=mbstring',
+        'extension=mysqli',
+        'extension=openssl',
+        'extension=pdo_mysql',
+        'extension=pdo_sqlite',
+        'extension=sqlite3',
+        'extension=zip',
+    ];
+    if (fs.existsSync(cacert)) {
+        lines.push(`curl.cainfo="${slash(cacert)}"`, `openssl.cafile="${slash(cacert)}"`);
+    }
+    return lines.join('\n') + '\n';
+}
+
+function writePhpIni(phpPath, userData) {
+    const phpDir = path.dirname(phpPath);
+    const extDir = path.join(phpDir, 'ext');
+    if (!fs.existsSync(extDir)) {
+        return null;
+    }
+    const contents = phpIniLines(phpPath, path.join(userData, 'php-error.log'));
+    const iniPath = path.join(userData, 'php.ini');
+    fs.mkdirSync(userData, { recursive: true });
+    fs.writeFileSync(iniPath, contents);
+    try {
+        fs.writeFileSync(path.join(phpDir, 'php.ini'), contents);
+    } catch {
+        // Program Files may be read-only; -c userData/php.ini is enough.
+    }
+    return iniPath;
+}
+
+function phpCliArgs(phpPath, userData, args) {
+    const ini = writePhpIni(phpPath, userData);
+    return ini ? ['-c', ini, ...args] : args;
+}
+
+function ensureStorage(laravelPath) {
+    for (const dir of [
+        'storage/app/public',
+        'storage/framework/cache/data',
+        'storage/framework/sessions',
+        'storage/framework/views',
+        'storage/logs',
+        'bootstrap/cache',
+    ]) {
+        fs.mkdirSync(path.join(laravelPath, dir), { recursive: true });
+    }
+}
+
+function engineBuildId(laravelPath) {
+    const file = path.join(laravelPath, 'desktop-engine-build.txt');
+    if (!fs.existsSync(file)) {
+        return '';
+    }
+    return fs.readFileSync(file, 'utf8').trim();
+}
+
+function ensureWritableLaravel(laravelPath, userData) {
+    ensureStorage(laravelPath);
+    const probe = path.join(laravelPath, 'storage', 'logs', '.write-test');
+    try {
+        fs.writeFileSync(probe, 'ok');
+        fs.unlinkSync(probe);
+        return laravelPath;
+    } catch {
+        const dest = path.join(userData, 'engine');
+        const srcBuild = engineBuildId(laravelPath);
+        const destBuild = engineBuildId(dest);
+        const needsCopy = !fs.existsSync(path.join(dest, 'artisan')) || (srcBuild !== '' && srcBuild !== destBuild);
+        if (needsCopy) {
+            fs.rmSync(dest, { recursive: true, force: true });
+            fs.cpSync(laravelPath, dest, { recursive: true });
+        }
+        ensureStorage(dest);
+        return dest;
+    }
 }
 
 function assertLaravel(laravelPath) {
@@ -60,7 +150,7 @@ function desktopEnv(laravelPath, userData, config) {
         APP_URL: `http://127.0.0.1:${port}`,
         APP_LOCALE: source.APP_LOCALE || 'en',
         DB_CONNECTION: 'sqlite',
-        DB_DATABASE: database,
+        DB_DATABASE: database.replace(/\\/g, '/'),
         DB_URL: '',
         CACHE_STORE: 'file',
         SESSION_DRIVER: 'file',
@@ -84,22 +174,78 @@ function desktopEnv(laravelPath, userData, config) {
     };
 }
 
-function runArtisan(phpPath, laravelPath, args, env) {
+function toEnvLine(key, value) {
+    const text = String(value ?? '');
+    if (text === '') {
+        return `${key}=`;
+    }
+    if (/[\s#"'$]/.test(text)) {
+        return `${key}="${text.replace(/"/g, '\\"')}"`;
+    }
+    return `${key}=${text}`;
+}
+
+function writeDesktopEnv(laravelPath, env) {
+    const body = Object.entries(env).map(([key, value]) => toEnvLine(key, value)).join('\n');
+    fs.writeFileSync(path.join(laravelPath, '.env'), `${body}\n`);
+}
+
+function disableTelescopeArtifacts(laravelPath) {
+    for (const rel of [
+        'bootstrap/cache/packages.php',
+        'bootstrap/cache/services.php',
+        'bootstrap/cache/config.php',
+    ]) {
+        const file = path.join(laravelPath, rel);
+        if (fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes('Telescope')) {
+            fs.unlinkSync(file);
+        }
+    }
+}
+
+function writeServerRouter(laravelPath, userData) {
+    const publicDir = path.join(laravelPath, 'public').replace(/\\/g, '/');
+    const router = path.join(userData, 'desktop-server.php');
+    fs.mkdirSync(userData, { recursive: true });
+    fs.writeFileSync(router, `<?php
+$publicPath = ${JSON.stringify(publicDir)};
+chdir($publicPath);
+$uri = urldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/');
+if ($uri !== '/' && file_exists($publicPath.$uri) && !is_dir($publicPath.$uri)) {
+    return false;
+}
+require $publicPath.'/index.php';
+`);
+    return router;
+}
+
+function phpProcessEnv(phpPath, userData, env) {
+    const iniDir = writePhpIni(phpPath, userData) ? userData : path.dirname(phpPath);
+    return {
+        ...process.env,
+        ...env,
+        PHPRC: iniDir,
+        PHP_INI_SCAN_DIR: '',
+    };
+}
+
+function runArtisan(phpPath, laravelPath, args, env, userData) {
     return new Promise((resolve, reject) => {
-        const proc = spawn(phpPath, ['artisan', ...args], {
+        const proc = spawn(phpPath, phpCliArgs(phpPath, userData, ['artisan', ...args]), {
             cwd: laravelPath,
-            env: { ...process.env, ...env },
+            env: phpProcessEnv(phpPath, userData, env),
             windowsHide: true,
         });
-        let stderr = '';
-        proc.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+        let output = '';
+        proc.stdout.on('data', (chunk) => { output += chunk.toString(); });
+        proc.stderr.on('data', (chunk) => { output += chunk.toString(); });
         proc.on('error', reject);
         proc.on('close', (code) => {
             if (code === 0) {
                 resolve();
                 return;
             }
-            reject(new Error(stderr.trim() || `php artisan ${args.join(' ')} failed (${code})`));
+            reject(new Error(output.trim() || `php artisan ${args.join(' ')} failed (${code})`));
         });
     });
 }
@@ -161,43 +307,74 @@ function stopServer() {
 
 async function startServer({ laravelPath, phpPath, userData, config, onLog }) {
     stopServer();
+    laravelPath = path.resolve(laravelPath);
     assertLaravel(laravelPath);
     const php = findPhp(phpPath);
+    laravelPath = ensureWritableLaravel(laravelPath, userData);
+    disableTelescopeArtifacts(laravelPath);
     const env = desktopEnv(laravelPath, userData, config);
     if (!env.APP_KEY) {
         throw new Error('Laravel .env is missing APP_KEY. Open the website project once so it can generate a key.');
     }
+    writeDesktopEnv(laravelPath, env);
 
     pauseViteHot(laravelPath);
     onLog?.('Preparing local SQLite database…');
-    await runArtisan(php, laravelPath, ['migrate', '--force'], env);
+    await runArtisan(php, laravelPath, ['migrate', '--force'], env, userData);
+
+    const publicDir = path.join(laravelPath, 'public');
+    const router = writeServerRouter(laravelPath, userData);
+    if (!fs.existsSync(path.join(publicDir, 'index.php'))) {
+        throw new Error('Laravel public server files are missing. Reinstall Delhi Kitchen Till.');
+    }
 
     port = PORT_START;
     const tryListen = async () => {
         onLog?.(`Starting billing engine on port ${port}…`);
+        env.APP_URL = `http://127.0.0.1:${port}`;
+        writeDesktopEnv(laravelPath, env);
         return new Promise((resolve, reject) => {
-            const proc = spawn(php, ['artisan', 'serve', `--host=127.0.0.1`, `--port=${port}`], {
-                cwd: laravelPath,
-                env: { ...process.env, ...env, APP_URL: `http://127.0.0.1:${port}` },
+            const proc = spawn(php, phpCliArgs(php, userData, ['-S', `127.0.0.1:${port}`, '-t', publicDir, router]), {
+                cwd: publicDir,
+                env: phpProcessEnv(php, userData, env),
                 windowsHide: true,
             });
-            let booted = false;
-            proc.on('error', reject);
-            proc.stderr.on('data', (chunk) => {
+            let settled = false;
+            let healthStarted = false;
+            const finish = (fn, value) => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                fn(value);
+            };
+            const startHealth = () => {
+                if (healthStarted || settled) {
+                    return;
+                }
+                healthStarted = true;
+                waitForHealth(port).then(() => finish(resolve)).catch((error) => finish(reject, error));
+            };
+            const onServerText = (chunk) => {
                 const text = chunk.toString();
-                if (text.toLowerCase().includes('address already in use') && port < PORT_END) {
+                if (/already in use/i.test(text) && port < PORT_END) {
                     port += 1;
                     proc.kill();
-                    tryListen().then(resolve).catch(reject);
+                    if (!settled) {
+                        settled = true;
+                        tryListen().then(resolve).catch(reject);
+                    }
+                    return;
                 }
-            });
-            proc.stdout.on('data', (chunk) => {
-                if (!booted && /started/i.test(chunk.toString())) {
-                    booted = true;
+                if (/started|listening/i.test(text)) {
+                    startHealth();
                 }
-            });
+            };
+            proc.on('error', (error) => finish(reject, error));
+            proc.stderr.on('data', onServerText);
+            proc.stdout.on('data', onServerText);
             child = proc;
-            waitForHealth(port).then(resolve).catch(reject);
+            setTimeout(startHealth, 1500);
         });
     };
 
@@ -217,7 +394,7 @@ function loopbackHeaders(token) {
     };
 }
 
-function requestJson(pathname, { method = 'GET', token, body } = {}) {
+function requestJson(pathname, { method = 'GET', token, body, timeoutMs = 150000 } = {}) {
     const payload = body ? JSON.stringify(body) : null;
     const url = new URL(pathname, currentUrl());
     return new Promise((resolve, reject) => {
@@ -226,6 +403,7 @@ function requestJson(pathname, { method = 'GET', token, body } = {}) {
             port: url.port,
             path: url.pathname,
             method,
+            timeout: timeoutMs,
             headers: {
                 ...loopbackHeaders(token),
                 ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
@@ -237,13 +415,25 @@ function requestJson(pathname, { method = 'GET', token, body } = {}) {
                 let json = {};
                 try { json = data ? JSON.parse(data) : {}; } catch { json = { message: data }; }
                 if (res.statusCode >= 400) {
-                    reject(new Error(json.message || `Request failed (${res.statusCode})`));
+                    let message = String(json.message || '').trim();
+                    const looksHtml = /<\/?[a-z][\s\S]*>/i.test(message) || /<\/?[a-z][\s\S]*>/i.test(data);
+                    if (!message || looksHtml) {
+                        message = `Till request failed (HTTP ${res.statusCode}).`;
+                    }
+                    if (message.length > 400) {
+                        message = `${message.slice(0, 397)}...`;
+                    }
+                    reject(new Error(message));
                     return;
                 }
                 resolve(json);
             });
         });
         req.on('error', reject);
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('Cloud sync timed out. Check internet, the website URL, and DESKTOP_SYNC_TOKEN.'));
+        });
         if (payload) {
             req.write(payload);
         }

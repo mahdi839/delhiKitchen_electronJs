@@ -2,13 +2,61 @@
   "name": "delhi-kitchen-till",
   "version": "1.0.0",
   "private": true,
-  "description": "Delhi Kitchen offline billing till. From this folder run: npm install && npm start",
+  "description": "Delhi Kitchen offline billing till.",
+  "author": "Delhi Kitchen",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "postinstall": "node scripts/download-electron.js"
+    "postinstall": "node scripts/download-electron.js",
+    "build:engine": "node scripts/stage-engine.js",
+    "build:win": "node scripts/stage-engine.js && electron-builder --win nsis"
   },
   "devDependencies": {
-    "electron": "^35.2.1"
+    "electron": "^35.2.1",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.delhikitchen.till",
+    "productName": "Delhi Kitchen Till",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist",
+      "buildResources": "resources"
+    },
+    "files": [
+      "src/**/*",
+      "renderer/**/*",
+      "resources/icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "extra/engine",
+        "to": "engine"
+      }
+    ],
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Delhi Kitchen Till",
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "artifactName": "DelhiKitchenTill-Setup-${version}.exe"
+    }
   }
 }

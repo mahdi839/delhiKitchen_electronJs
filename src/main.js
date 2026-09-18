@@ -6,6 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const configStore = require('./config-store');
 const laravel = require('./laravel-server');
+const updater = require('./app-updater');
+const chromeMenu = require('./chrome-menu');
 
 const SCREENS = {
     dashboard: '/',
@@ -24,6 +26,9 @@ let mainWindow = null;
 let tillView = null;
 let config = null;
 let engine = null;
+let loadTillCount = 0;
+let tillBooted = false;
+let loadTillChain = Promise.resolve();
 
 function createToken() {
     return crypto.randomBytes(24).toString('hex');
@@ -101,14 +106,20 @@ function setTillVisible(visible) {
     if (!mainWindow || !tillView) {
         return;
     }
-    try {
-        mainWindow.removeBrowserView(tillView);
-    } catch {
-        // View was not attached.
-    }
+    const attached = mainWindow.getBrowserViews().includes(tillView);
     if (visible) {
-        mainWindow.addBrowserView(tillView);
+        if (!attached) {
+            mainWindow.addBrowserView(tillView);
+        }
         layoutView();
+        return;
+    }
+    if (attached) {
+        try {
+            mainWindow.removeBrowserView(tillView);
+        } catch {
+            // View was not attached.
+        }
     }
 }
 
@@ -130,9 +141,29 @@ function openCloudSetup(message) {
 }
 
 async function loadTill(pathname = '/pos') {
-    attachTill();
-    setTillVisible(true);
-    await tillView.webContents.loadURL(`${engine.url}${pathname}`);
+    const run = async () => {
+        loadTillCount += 1;
+        const seq = loadTillCount;
+        const url = `${engine?.url}${pathname}`;
+        attachTill();
+        setTillVisible(true);
+        try {
+            await tillView.webContents.loadURL(url);
+        } catch (error) {
+            const aborted = /ERR_ABORTED|-3/.test(String(error?.message || error));
+            if (aborted && seq !== loadTillCount) {
+                return;
+            }
+            if (aborted) {
+                await tillView.webContents.loadURL(url);
+                return;
+            }
+            throw error;
+        }
+    };
+    const pending = loadTillChain.then(run, run);
+    loadTillChain = pending.catch(() => {});
+    return pending;
 }
 
 async function reloadUi() {
@@ -219,9 +250,15 @@ function createWindow() {
         resetToActualSize(mainWindow.webContents);
         mainWindow.maximize();
         mainWindow.show();
+        updater.bind(mainWindow);
     });
-    mainWindow.on('resize', layoutView);
+    mainWindow.on('resize', () => {
+        chromeMenu.close();
+        layoutView();
+    });
+    mainWindow.on('move', () => chromeMenu.close());
     mainWindow.on('closed', () => {
+        chromeMenu.close();
         tillView = null;
         mainWindow = null;
     });
@@ -273,6 +310,7 @@ ipcMain.handle('shell-ready', async () => {
             },
         });
         await loadTill('/pos');
+        tillBooted = true;
         return { ok: true, needsSetup: false, packaged: app.isPackaged };
     } catch (error) {
         const message = publicError(error);
@@ -394,11 +432,40 @@ ipcMain.handle('set-printer', async (_event, name) => {
     return { printerName: config.printerName };
 });
 
+ipcMain.handle('open-chrome-menu', (_event, payload) => {
+    chromeMenu.open(mainWindow, {
+        ...payload,
+        printer: config?.printerName || payload?.printer || '',
+    });
+    return { ok: true };
+});
+
+ipcMain.handle('chrome-menu-pick', async (_event, payload) => {
+    const action = payload?.action;
+    if (action === 'printer') {
+        config = configStore.save({ printerName: payload.printer || '' });
+        chromeMenu.close();
+        sendStatus({ config: { printerName: config.printerName } });
+        return { ok: true };
+    }
+    chromeMenu.close();
+    if (['orders', 'kitchen', 'reports', 'settings'].includes(action)) {
+        mainWindow?.webContents.send('chrome-menu-action', { type: 'screen', screen: action });
+        return { ok: true };
+    }
+    mainWindow?.webContents.send('chrome-menu-action', { type: action });
+    return { ok: true };
+});
+
 ipcMain.handle('open-screen', async (_event, screen) => {
     const pathname = SCREENS[screen] || '/pos';
+    if (!tillBooted) {
+        return { ok: false, message: 'Still starting' };
+    }
     await loadTill(pathname);
     return { ok: true };
 });
 
 ipcMain.handle('print-receipt', () => printReceipt());
 ipcMain.handle('reload-ui', () => reloadUi());
+ipcMain.handle('check-update', () => updater.checkAndInstall());

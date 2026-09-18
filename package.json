@@ -1,6 +1,6 @@
 {
   "name": "delhi-kitchen-till",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "private": true,
   "description": "Delhi Kitchen offline billing till.",
   "author": "Delhi Kitchen",
@@ -9,7 +9,11 @@
     "start": "electron .",
     "postinstall": "node scripts/download-electron.js",
     "build:engine": "node scripts/stage-engine.js",
-    "build:win": "node scripts/stage-engine.js && electron-builder --win nsis"
+    "build:win": "node scripts/stage-engine.js && electron-builder --win nsis",
+    "release:win": "node scripts/stage-engine.js && electron-builder --win nsis --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "electron": "^35.2.1",
@@ -57,6 +61,12 @@
       "installerIcon": "resources/icon.ico",
       "uninstallerIcon": "resources/icon.ico",
       "artifactName": "DelhiKitchenTill-Setup-${version}.exe"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "mahdi839",
+      "repo": "delhiKitchen_electronJs",
+      "releaseType": "release"
     }
   }
 }

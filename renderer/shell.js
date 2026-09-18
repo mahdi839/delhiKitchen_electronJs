@@ -2,6 +2,7 @@
 
 const netBadge = document.getElementById('netBadge');
 const printerSelect = document.getElementById('printerSelect');
+const printerLabel = document.getElementById('printerLabel');
 const stage = document.getElementById('stage');
 const splashCard = document.getElementById('splashCard');
 const setupCard = document.getElementById('setupCard');
@@ -17,8 +18,86 @@ const trayRight = document.getElementById('trayRight');
 
 function setOnline() {
     const online = navigator.onLine;
-    netBadge.textContent = online ? 'Online' : 'Offline';
+    const label = online ? 'Online' : 'Offline';
+    netBadge.textContent = label;
     netBadge.className = `badge ${online ? 'online' : 'offline'}`;
+}
+
+function printerText(name) {
+    return name ? `Printer ${name}` : 'Printer system default';
+}
+
+function setPrinterLabel(name) {
+    if (printerLabel) {
+        printerLabel.textContent = name || 'System default';
+        printerLabel.title = name || 'System default';
+    }
+    trayMid.textContent = printerText(name);
+}
+
+const DROP_SCREENS = {
+    orders: ['orders', 'kitchen'],
+    bills: ['reports', 'settings'],
+};
+
+function setNavActive(screen) {
+    document.querySelectorAll('#screens [data-screen]').forEach((item) => {
+        item.classList.toggle('active', item.dataset.screen === screen);
+    });
+    document.querySelectorAll('#screens .nav-drop').forEach((drop) => {
+        const screens = DROP_SCREENS[drop.dataset.drop] || [];
+        drop.querySelector('.nav-drop-btn')?.classList.toggle('active', screens.includes(screen));
+    });
+}
+
+function openChromeMenu(kind, trigger, align) {
+    const rect = trigger.getBoundingClientRect();
+    window.till.openChromeMenu({
+        kind,
+        x: align === 'right' ? rect.right : rect.left,
+        y: rect.bottom + 8,
+        align,
+        online: navigator.onLine,
+    });
+}
+
+async function runReload() {
+    trayLeft.textContent = 'Reloading…';
+    try {
+        await window.till.reloadUi();
+        trayLeft.textContent = 'Reloaded — latest page loaded';
+    } catch (error) {
+        trayLeft.textContent = error.message || 'Reload failed';
+    }
+}
+
+async function runUpdate() {
+    trayLeft.textContent = 'Checking for updates…';
+    try {
+        const result = await window.till.checkUpdate();
+        trayLeft.textContent = result?.message || (result?.ok ? 'Up to date' : 'Update failed');
+    } catch (error) {
+        trayLeft.textContent = error.message || 'Update failed';
+    }
+}
+
+async function runCloud() {
+    setSyncBanner('', 'Change the website URL or token, then pull again.');
+    await window.till.openCloudSetup();
+}
+
+async function runSync() {
+    showSetup();
+    setSyncBanner('working', 'Syncing with cloud… downloading menu and users.');
+    await window.till.openCloudSetup();
+    const result = await window.till.syncNow();
+    if (result && result.ok === false) {
+        setSyncBanner('error', result.message || 'Sync failed.');
+        return;
+    }
+    const products = Number(result?.pulled?.products || 0);
+    const users = Number(result?.pulled?.users || 0);
+    setSyncBanner('ok', `Complete. Loaded ${products} products and ${users} users. Click Back to till.`);
 }
 
 function showSplash(message) {
@@ -85,15 +164,19 @@ async function loadPrinters(selected) {
         .map((printer) => `<option value="${printer.name}">${printer.name}${printer.isDefault ? ' (default)' : ''}</option>`)
         .join('');
     printerSelect.value = selected || '';
-    trayMid.textContent = selected ? `Printer ${selected}` : 'Printer system default';
+    setPrinterLabel(selected);
 }
 
 window.till.onStatus((payload) => {
     if (payload.lastSyncAt) {
         trayRight.textContent = `Last sync ${new Date(payload.lastSyncAt).toLocaleString()}`;
     }
+    if (payload.message) {
+        trayLeft.textContent = payload.message;
+    }
     if (payload.phase === 'boot') {
         showSplash(payload.message);
+        document.getElementById('screens')?.classList.add('is-disabled');
     }
     if (payload.phase === 'setup') {
         showSetup();
@@ -109,12 +192,14 @@ window.till.onStatus((payload) => {
     if (payload.phase === 'ready' && payload.sync !== 'ok') {
         showTill();
         setBusy(false);
+        document.getElementById('screens')?.classList.remove('is-disabled');
     }
     if (payload.phase === 'error') {
         showSplash(payload.message);
         bootMessage.textContent = payload.message;
+        document.getElementById('screens')?.classList.remove('is-disabled');
     }
-    if (payload.config?.printerName) {
+    if (payload.config?.printerName !== undefined) {
         loadPrinters(payload.config.printerName);
     }
     if (payload.packaged) {
@@ -123,12 +208,50 @@ window.till.onStatus((payload) => {
 });
 
 document.getElementById('screens').addEventListener('click', (event) => {
+    const menuBtn = event.target.closest('[data-menu]');
+    if (menuBtn) {
+        openChromeMenu(menuBtn.dataset.menu, menuBtn);
+        return;
+    }
     const button = event.target.closest('[data-screen]');
     if (!button) {
         return;
     }
-    document.querySelectorAll('#screens button').forEach((item) => item.classList.toggle('active', item === button));
+    setNavActive(button.dataset.screen);
     window.till.openScreen(button.dataset.screen);
+});
+
+document.getElementById('statusBtn').addEventListener('click', (event) => {
+    event.stopPropagation();
+    openChromeMenu('status', event.currentTarget, 'right');
+});
+
+document.getElementById('toolsBtn').addEventListener('click', (event) => {
+    event.stopPropagation();
+    openChromeMenu('tools', event.currentTarget, 'right');
+});
+
+window.till.onMenuAction((payload) => {
+    if (payload?.type === 'screen' && payload.screen) {
+        setNavActive(payload.screen);
+        window.till.openScreen(payload.screen);
+        return;
+    }
+    if (payload?.type === 'reload') {
+        runReload();
+        return;
+    }
+    if (payload?.type === 'update') {
+        runUpdate();
+        return;
+    }
+    if (payload?.type === 'cloud') {
+        runCloud();
+        return;
+    }
+    if (payload?.type === 'sync') {
+        runSync();
+    }
 });
 
 document.querySelector('.win').addEventListener('click', (event) => {
@@ -136,40 +259,6 @@ document.querySelector('.win').addEventListener('click', (event) => {
     if (button) {
         window.till.windowControl(button.dataset.win);
     }
-});
-
-document.getElementById('reloadBtn').addEventListener('click', async () => {
-    trayLeft.textContent = 'Reloading…';
-    try {
-        await window.till.reloadUi();
-        trayLeft.textContent = 'Reloaded — latest page loaded';
-    } catch (error) {
-        trayLeft.textContent = error.message || 'Reload failed';
-    }
-});
-
-document.getElementById('cloudBtn').addEventListener('click', async () => {
-    setSyncBanner('', 'Change the website URL or token, then pull again.');
-    await window.till.openCloudSetup();
-});
-
-document.getElementById('syncBtn').addEventListener('click', async () => {
-    showSetup();
-    setSyncBanner('working', 'Syncing with cloud… downloading menu and users.');
-    await window.till.openCloudSetup();
-    const result = await window.till.syncNow();
-    if (result && result.ok === false) {
-        setSyncBanner('error', result.message || 'Sync failed.');
-        return;
-    }
-    const products = Number(result?.pulled?.products || 0);
-    const users = Number(result?.pulled?.users || 0);
-    setSyncBanner('ok', `Complete. Loaded ${products} products and ${users} users. Click Back to till.`);
-});
-
-printerSelect.addEventListener('change', async () => {
-    await window.till.setPrinter(printerSelect.value);
-    trayMid.textContent = printerSelect.value ? `Printer ${printerSelect.value}` : 'Printer system default';
 });
 
 cancelSetupBtn.addEventListener('click', async () => {
@@ -221,6 +310,7 @@ window.till.ready().then((result) => {
     }
     if (result?.ok) {
         showTill();
+        document.getElementById('screens')?.classList.remove('is-disabled');
     }
     loadPrinters();
 });

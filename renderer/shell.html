@@ -13,23 +13,26 @@
             <p class="title">Delhi Kitchen</p>
         </div>
         <nav class="screens" id="screens">
-            <button data-screen="pos" class="nav-pos active">POS</button>
-            <button data-screen="orders" class="nav-orders">Orders</button>
-            <button data-screen="kitchen" class="nav-kot">KOT</button>
-            <button data-screen="tables" class="nav-tables">Tables</button>
-            <button data-screen="sections" class="nav-sections">Sections</button>
-            <button data-screen="products" class="nav-products">Products</button>
-            <button data-screen="categories" class="nav-categories">Categories</button>
-            <button data-screen="reports" class="nav-bills">Bills</button>
-            <button data-screen="dashboard" class="nav-dash">Dashboard</button>
-            <button data-screen="settings" class="nav-settings">Settings</button>
+            <button type="button" data-screen="pos" class="nav-pos active">POS</button>
+            <div class="nav-drop" data-drop="orders">
+                <button type="button" class="nav-drop-btn nav-orders" data-menu="orders" aria-haspopup="true">Orders</button>
+            </div>
+            <button type="button" data-screen="tables" class="nav-tables">Tables</button>
+            <button type="button" data-screen="sections" class="nav-sections">Sections</button>
+            <button type="button" data-screen="products" class="nav-products">Products</button>
+            <button type="button" data-screen="categories" class="nav-categories">Categories</button>
+            <button type="button" data-screen="dashboard" class="nav-dash">Dashboard</button>
+            <div class="nav-drop" data-drop="bills">
+                <button type="button" class="nav-drop-btn nav-bills" data-menu="bills" aria-haspopup="true">Bills</button>
+            </div>
         </nav>
         <div class="tools">
-            <span id="netBadge" class="badge offline">Offline</span>
-            <select id="printerSelect" title="Receipt printer"></select>
-            <button type="button" id="reloadBtn" class="ghost">Reload</button>
-            <button type="button" id="cloudBtn" class="ghost">Cloud</button>
-            <button type="button" id="syncBtn" class="gold">Sync</button>
+            <button type="button" class="status-btn" id="statusBtn" data-menu="status" aria-haspopup="true">
+                <span id="netBadge" class="badge offline">Offline</span>
+                <span id="printerLabel" class="printer-label">System default</span>
+            </button>
+            <button type="button" class="ghost tools-btn" id="toolsBtn" data-menu="tools" aria-haspopup="true">Tools</button>
+            <select id="printerSelect" class="hidden" aria-hidden="true"></select>
             <div class="win">
                 <button type="button" data-win="min">–</button>
                 <button type="button" data-win="max">□</button>

@@ -16,5 +16,8 @@ contextBridge.exposeInMainWorld('till', {
     onStatus: (fn) => ipcRenderer.on('till-status', (_event, payload) => fn(payload)),
     openCloudSetup: () => ipcRenderer.invoke('open-cloud-setup'),
     closeCloudSetup: () => ipcRenderer.invoke('close-cloud-setup'),
+    checkUpdate: () => ipcRenderer.invoke('check-update'),
+    openChromeMenu: (payload) => ipcRenderer.invoke('open-chrome-menu', payload),
+    onMenuAction: (fn) => ipcRenderer.on('chrome-menu-action', (_event, payload) => fn(payload)),
     isPackaged: () => ipcRenderer.invoke('till-state').then((state) => Boolean(state?.packaged)),
 });

@@ -113,7 +113,7 @@ function ensureWritableLaravel(laravelPath, userData) {
         const dest = path.join(userData, 'engine');
         const srcBuild = engineBuildId(laravelPath);
         const destBuild = engineBuildId(dest);
-        const needsCopy = !fs.existsSync(path.join(dest, 'artisan')) || (srcBuild !== '' && srcBuild !== destBuild);
+        const needsCopy = !fs.existsSync(path.join(dest, 'artisan')) || srcBuild !== destBuild;
         if (needsCopy) {
             fs.rmSync(dest, { recursive: true, force: true });
             fs.cpSync(laravelPath, dest, { recursive: true });

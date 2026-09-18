@@ -34,8 +34,11 @@ html, body {
 }
 
 .chrome {
+    position: relative;
+    z-index: 40;
     height: 64px;
-    padding: 0 12px 0 16px;
+    padding: 0 10px 0 14px;
+    overflow: visible;
 }
 
 .tray {
@@ -69,63 +72,144 @@ html, body {
 .mark.xl { width: 72px; height: 72px; font-size: 28px; border-radius: 22px; margin: 0 auto 12px; }
 .title { margin: 0; font-size: 14px; font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
 
-.screens, .tools, .win, .actions { -webkit-app-region: no-drag; }
+.screens, .tools, .win, .actions, .nav-drop, .nav-menu { -webkit-app-region: no-drag; }
+.screens.is-disabled {
+    pointer-events: none;
+    opacity: .45;
+}
 .screens {
     display: flex;
     flex: 1 1 auto;
-    align-items: stretch;
+    align-items: center;
+    justify-content: flex-start;
     gap: 8px;
     min-width: 0;
     height: 40px;
-    overflow: hidden;
+    overflow: visible;
 }
-.screens button, .gold, .ghost, .win button {
+.screens > button,
+.nav-drop-btn,
+.gold,
+.ghost,
+.win button {
     border: 0;
     cursor: pointer;
     font: inherit;
 }
-.screens button {
-    flex: 1 1 0;
-    min-width: 0;
-    height: 40px;
-    padding: 0 6px;
+.screens > button,
+.nav-drop-btn,
+.nav-menu [data-screen] {
+    height: 36px;
+    padding: 0 12px;
     border-radius: 12px;
     color: #fff;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 800;
-    letter-spacing: .08em;
+    letter-spacing: .06em;
     text-transform: uppercase;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     border: 1px solid rgba(255, 255, 255, .14);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, .22),
         0 8px 18px rgba(0, 0, 0, .22);
     transition: filter .15s ease, transform .15s ease, box-shadow .15s ease;
 }
-.screens button:hover {
+.screens > button,
+.nav-drop-btn {
+    flex: 0 0 108px;
+    width: 108px;
+}
+.nav-drop-btn::after {
+    content: "▾";
+    margin-left: 6px;
+    font-size: 10px;
+    opacity: .9;
+}
+.screens > button:hover,
+.nav-drop-btn:hover,
+.nav-menu [data-screen]:hover {
     filter: brightness(1.12);
     transform: translateY(-1px);
 }
-.screens button.active {
+.screens > button.active,
+.nav-drop-btn.active,
+.nav-menu [data-screen].active {
     box-shadow:
         0 0 0 2px rgba(243, 215, 160, .88),
         inset 0 1px 0 rgba(255, 255, 255, .32),
         0 10px 20px rgba(212, 162, 76, .28);
 }
-.screens .nav-pos { background: #0f766e; }
-.screens .nav-orders { background: #4338ca; }
-.screens .nav-kot { background: #b45309; }
-.screens .nav-tables { background: #0369a1; }
-.screens .nav-sections { background: #6d28d9; }
-.screens .nav-products { background: #047857; }
-.screens .nav-categories { background: #9f1239; }
-.screens .nav-bills { background: #334155; }
-.screens .nav-dash { background: linear-gradient(180deg, #d4a24c, #a56b18); color: #1a1205; }
-.screens .nav-settings { background: #7d0ba7; }
+.nav-pos { background: #0f766e; }
+.nav-orders { background: #4338ca; }
+.nav-kot { background: #b45309; }
+.nav-tables { background: #0369a1; }
+.nav-sections { background: #6d28d9; }
+.nav-products { background: #047857; }
+.nav-categories { background: #9f1239; }
+.nav-bills { background: #334155; }
+.nav-dash { background: linear-gradient(180deg, #d4a24c, #a56b18); color: #1a1205; }
+.nav-settings { background: #7d0ba7; }
+
+.nav-drop { position: relative; flex: 0 0 auto; }
+.nav-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 50;
+    min-width: 180px;
+    padding: 8px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: rgba(16, 24, 39, .96);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, .45);
+}
+.nav-drop.open .nav-menu { display: grid; gap: 6px; }
+.nav-menu [data-screen] { width: 100%; text-align: left; }
+.status-menu,
+.tools-menu { right: 0; left: auto; min-width: 220px; }
 
 .tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.status-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    max-width: 210px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #0f1624;
+    color: var(--ink);
+    cursor: pointer;
+}
+.status-btn::after {
+    content: "▾";
+    color: var(--muted);
+    font-size: 10px;
+}
+.printer-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+}
+.menu-kicker {
+    margin: 4px 2px 0;
+    color: var(--gold);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+}
+.menu-copy {
+    margin: 0 2px 8px;
+    font-size: 13px;
+    font-weight: 700;
+}
 .badge {
     border-radius: 999px;
     padding: 6px 10px;
@@ -137,12 +221,12 @@ html, body {
 .badge.offline { background: rgba(248, 113, 113, .15); color: #fecaca; }
 .badge.online { background: rgba(52, 211, 153, .15); color: #bbf7d0; }
 #printerSelect {
-    max-width: 180px;
+    width: 100%;
     background: #0f1624;
     color: var(--ink);
     border: 1px solid var(--line);
     border-radius: 10px;
-    padding: 7px 8px;
+    padding: 8px;
 }
 .gold {
     background: linear-gradient(180deg, var(--gold-2), var(--gold));
@@ -160,6 +244,16 @@ html, body {
     padding: 8px 14px;
     font-weight: 800;
 }
+.tools-btn {
+    height: 36px;
+    min-width: 88px;
+    padding: 0 12px;
+}
+.tools-menu .ghost,
+.tools-menu .gold {
+    width: 100%;
+    height: 36px;
+}
 #reloadBtn:hover { filter: brightness(1.12); }
 .win { display: flex; }
 .win button {
@@ -175,6 +269,7 @@ html, body {
 .stage {
     position: fixed;
     inset: 64px 0 42px;
+    z-index: 1;
     display: grid;
     place-items: center;
     overflow: auto;
@@ -289,3 +384,37 @@ input {
     animation: slide 1.1s ease-in-out infinite;
 }
 button[disabled] { opacity: .5; cursor: wait; }
+
+@media (max-width: 1400px) {
+    .title { display: none; }
+    .screens > button,
+    .nav-drop-btn {
+        flex-basis: 96px;
+        width: 96px;
+    }
+    .status-btn { max-width: 168px; }
+}
+
+@media (max-width: 1180px) {
+    .chrome { padding: 0 8px 0 10px; gap: 8px; }
+    .screens { gap: 6px; }
+    .screens > button,
+    .nav-drop-btn {
+        flex-basis: 84px;
+        width: 84px;
+        padding: 0 8px;
+        font-size: 11px;
+    }
+    .printer-label { display: none; }
+    .status-btn { max-width: none; padding: 0 8px; }
+    .tools-btn { min-width: 76px; }
+}
+
+@media (max-width: 980px) {
+    .screens > button,
+    .nav-drop-btn {
+        flex-basis: 76px;
+        width: 76px;
+        letter-spacing: .02em;
+    }
+}
